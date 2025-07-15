@@ -112,9 +112,10 @@ func climaHandler(w http.ResponseWriter, r *http.Request) {
 	// Resposta JSON
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]float64{
-		"tempC": tempC,
-		"tempF": tempF,
-		"tempK": tempK,
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"city":   cepData.Localidade,
+		"temp_C": tempC,
+		"temp_F": tempF,
+		"temp_K": tempK,
 	})
 }
