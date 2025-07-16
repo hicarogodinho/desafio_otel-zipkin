@@ -92,7 +92,7 @@ func climaHandler(w http.ResponseWriter, r *http.Request) {
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("can not find zipcode")
+			http.Error(w, `{"message": "can not find zipcode"}`, http.StatusNotFound)
 		}
 
 		body, _ := io.ReadAll(resp.Body)
