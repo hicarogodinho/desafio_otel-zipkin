@@ -1,18 +1,25 @@
-version: '3.8'
-
 services:
-  servico_a:
-    build:
-      context: ./servico_a
-      dockerfile: Dockerfile
-    container_name: servico_a
-    ports:
-      - "8080:8080"
-
   servico_b:
     build:
       context: ./servico_b
       dockerfile: Dockerfile
     container_name: servico_b
     ports:
-      - "8081:8080"
+      - "8081:8080"  # Porta externa 8081 → interna 8080
+    networks:
+      - rede_interna
+
+  servico_a:
+    build:
+      context: ./servico_a
+      dockerfile: Dockerfile
+    container_name: servico_a
+    ports:
+      - "8080:8081"  # Porta externa 8080 → interna 8080
+    depends_on:
+      - servico_b
+    networks:
+      - rede_interna
+
+networks:
+  rede_interna:

@@ -53,7 +53,7 @@ func cepHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	// Encaminha a solicitação para o serviço B
-	servicoBURL := fmt.Sprintf("http://localhost:8080/clima?cep=%s&apiKey=ff4e9f3ecf62466396a141841251407", req.Cep)
+	servicoBURL := fmt.Sprintf("http://servico_b:8080/clima?cep=%s&apiKey=ff4e9f3ecf62466396a141841251407", req.Cep)
 	reqB, _ := http.NewRequestWithContext(ctx, "GET", servicoBURL, nil)
 
 	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(reqB.Header))
