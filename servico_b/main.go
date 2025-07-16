@@ -1,12 +1,19 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"regexp"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/zipkin"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 type ViaCEPResponse struct {
@@ -35,13 +42,18 @@ type WeatherAPIResponse struct {
 }
 
 func main() {
-	http.HandleFunc("/clima", climaHandler)
-	fmt.Println("Servidor rodando na porta 8080...")
+	initTracer()
+
+	mux := http.NewServeMux()
+	mux.Handle("/clima", otelhttp.NewHandler(http.HandlerFunc(climaHandler), "climaHandler"))
+	// http.HandleFunc("/clima", climaHandler)
+	// fmt.Println("Servidor rodando na porta 8080...")
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	http.ListenAndServe(":"+port, nil)
+	fmt.Println("Serviço B rodando na porta ", port)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 	// http.ListenAndServe(":8080", nil)
 }
 
@@ -51,6 +63,9 @@ var (
 )
 
 func climaHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tr := otel.Tracer("servico_b")
+
 	cep := r.URL.Query().Get("cep")
 	apiKey := r.URL.Query().Get("apiKey")
 
@@ -60,48 +75,56 @@ func climaHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Consulta ViaCEP
-	// viaCEPurl := fmt.Sprintf("https://viacep.com.br/ws/%s/json/", cep)
-	viaCEPurl := fmt.Sprintf("%s%s/json/", viaCEPurlBase, cep)
-	resp, err := http.Get(viaCEPurl)
+	var cepData ViaCEPResponse
+	var weatherData WeatherAPIResponse
+
+	// Span para ViaCEP
+	err := func(ctx context.Context) error {
+		ctx, span := tr.Start(ctx, "Chamada ao ViaCEP")
+		defer span.End()
+
+		viaCEPurl := fmt.Sprintf("%s%s/json/", viaCEPurlBase, cep)
+		resp, err := http.Get(viaCEPurl)
+		if err != nil {
+			return fmt.Errorf("erro ao consultar ViaCEP")
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("can not find zipcode")
+		}
+
+		body, _ := io.ReadAll(resp.Body)
+		if err := json.Unmarshal(body, &cepData); err != nil {
+			return fmt.Errorf("erro ao processar resposta do ViaCEP: %w", err)
+		}
+		return nil
+	}(ctx)
 	if err != nil {
 		http.Error(w, `{"message": "erro ao consultar ViaCEP"}`, http.StatusInternalServerError)
 		return
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		http.Error(w, `{"message": "can not find zipcode"}`, http.StatusNotFound)
-		return
-	}
+	// Span para WeatherAPI
+	err = func(ctx context.Context) error {
+		ctx, span := tr.Start(ctx, "Chamada ao WeatherAPI")
+		defer span.End()
 
-	body, _ := io.ReadAll(resp.Body)
-	var cepData ViaCEPResponse
+		weatherAPIurl := fmt.Sprintf("%s?key=%s&q=%s", weatherAPIurlBase, apiKey, cepData.Localidade)
+		resp, err := http.Get(weatherAPIurl)
+		if err != nil {
+			return fmt.Errorf("erro ao consultar WeatherAPI")
+		}
+		defer resp.Body.Close()
 
-	if err := json.Unmarshal(body, &cepData); err != nil {
-		http.Error(w, `{"message": "erro ao processar resposta do ViaCEP"}`, http.StatusInternalServerError)
-		return
-	}
-
-	if cepData.isErro() || cepData.Localidade == "" {
-		http.Error(w, `{"message": "can not find zipcode"}`, http.StatusNotFound)
-		return
-	}
-
-	// Consulta WeatherAPI
-	// weatherAPIurl := fmt.Sprintf("https://api.weatherapi.com/v1/current.json?key=%s&q=%s", apiKey, cepData.Localidade)
-	weatherAPIurl := fmt.Sprintf("%s?key=%s&q=%s", weatherAPIurlBase, apiKey, cepData.Localidade)
-	resp, err = http.Get(weatherAPIurl)
+		body, _ := io.ReadAll(resp.Body)
+		if err := json.Unmarshal(body, &weatherData); err != nil {
+			return fmt.Errorf("erro ao processar resposta do WeatherAPI: %w", err)
+		}
+		return nil
+	}(ctx)
 	if err != nil {
 		http.Error(w, `{"message": "erro ao consultar WeatherAPI"}`, http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-
-	body, _ = io.ReadAll(resp.Body)
-	var weatherData WeatherAPIResponse
-	if err := json.Unmarshal(body, &weatherData); err != nil {
-		http.Error(w, `{"message": "erro ao processar dados do clima"}`, http.StatusInternalServerError)
 		return
 	}
 
@@ -118,4 +141,17 @@ func climaHandler(w http.ResponseWriter, r *http.Request) {
 		"temp_F": tempF,
 		"temp_K": tempK,
 	})
+}
+
+func initTracer() {
+	endpoint := "http://localhost:9411/api/v2/spans"
+	exporter, err := zipkin.New(endpoint)
+	if err != nil {
+		log.Fatalf("Failed to create Zipkin exporter: %v", err)
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+	)
+	otel.SetTracerProvider(tp)
 }
