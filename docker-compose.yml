@@ -6,4 +6,4 @@ services:
     container_name: desafio_cidade-clima
     ports:
       - "8080:8080"
-    command: go test -v
+    # command: go test -v

@@ -1,11 +1,20 @@
-FROM golang:1.21-alpine
+FROM golang:1.23-alpine AS build
 
 WORKDIR /app
-COPY . .
 
-RUN go mod tidy
+COPY go.mod ./
+COPY go.sum ./
+RUN go mod download
+
+COPY . .
 RUN go build -o app .
 
-EXPOSE 8080
+RUN go mod tidy
 
-CMD ["go", "test", "-v"]
+FROM gcr.io/distroless/static
+COPY --from=build /app/app /
+ENTRYPOINT ["/app"]
+
+# EXPOSE 8080
+
+# CMD ["go", "test", "-v"]
