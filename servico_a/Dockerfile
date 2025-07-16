@@ -2,14 +2,12 @@ FROM golang:1.23-alpine AS build
 
 WORKDIR /app
 
-COPY go.mod ./
-COPY go.sum ./
+COPY go.mod .
+COPY go.sum .
 RUN go mod download
 
 COPY . .
 RUN go build -o app .
-
-RUN go mod tidy
 
 FROM gcr.io/distroless/static
 COPY --from=build /app/app /

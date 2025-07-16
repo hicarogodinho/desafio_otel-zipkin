@@ -1,9 +1,18 @@
 version: '3.8'
 
 services:
-  app:
-    build: .
-    container_name: desafio_cidade-clima
+  servico_a:
+    build:
+      context: ./servico_a
+      dockerfile: Dockerfile
+    container_name: servico_a
     ports:
       - "8080:8080"
-    # command: go test -v
+
+  servico_b:
+    build:
+      context: ./servico_b
+      dockerfile: Dockerfile
+    container_name: servico_b
+    ports:
+      - "8081:8080"
