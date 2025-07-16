@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 
@@ -53,7 +54,7 @@ func main() {
 		port = "8080"
 	}
 	fmt.Println("Serviço B rodando na porta ", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	log.Fatal(http.ListenAndServe(":"+port, mux))
 	// http.ListenAndServe(":8080", nil)
 }
 
@@ -110,7 +111,8 @@ func climaHandler(w http.ResponseWriter, r *http.Request) {
 		ctx, span := tr.Start(ctx, "Chamada ao WeatherAPI")
 		defer span.End()
 
-		weatherAPIurl := fmt.Sprintf("%s?key=%s&q=%s", weatherAPIurlBase, apiKey, cepData.Localidade)
+		escapedCity := url.QueryEscape(cepData.Localidade)
+		weatherAPIurl := fmt.Sprintf("%s?key=%s&q=%s", weatherAPIurlBase, apiKey, escapedCity)
 		resp, err := http.Get(weatherAPIurl)
 		if err != nil {
 			return fmt.Errorf("erro ao consultar WeatherAPI")
