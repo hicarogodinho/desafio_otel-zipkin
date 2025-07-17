@@ -13,8 +13,10 @@ import (
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/zipkin"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 )
 
 type ViaCEPResponse struct {
@@ -146,14 +148,31 @@ func climaHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func initTracer() {
-	endpoint := "http://localhost:9411/api/v2/spans"
-	exporter, err := zipkin.New(endpoint)
+	ctx := context.Background()
+
+	// Exportador OTLP via HTTP apontando para o OTEL Collector
+	exporter, err := otlptracehttp.New(ctx,
+		otlptracehttp.WithEndpoint("otel-collector:4318"),
+		otlptracehttp.WithInsecure(),
+	)
 	if err != nil {
-		log.Fatalf("Failed to create Zipkin exporter: %v", err)
+		log.Fatalf("Erro ao criar exportador OTLP: %v", err)
+	}
+
+	// Define o nome do serviço para aparecer no Zipkin
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			semconv.ServiceName("servico_b"),
+		),
+	)
+	if err != nil {
+		log.Fatalf("Erro ao criar recurso: %v", err)
 	}
 
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(res),
 	)
+
 	otel.SetTracerProvider(tp)
 }
