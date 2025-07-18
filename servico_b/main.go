@@ -95,16 +95,22 @@ func climaHandler(w http.ResponseWriter, r *http.Request) {
 
 		if resp.StatusCode != http.StatusOK {
 			http.Error(w, `{"message": "can not find zipcode"}`, http.StatusNotFound)
+			return fmt.Errorf("status code inválido do ViaCEP")
 		}
 
 		body, _ := io.ReadAll(resp.Body)
 		if err := json.Unmarshal(body, &cepData); err != nil {
 			return fmt.Errorf("erro ao processar resposta do ViaCEP: %w", err)
 		}
+
+		if cepData.isErro() || cepData.Localidade == "" {
+			http.Error(w, `{"message": "can not find zipcode"}`, http.StatusNotFound)
+			return fmt.Errorf("dados de CEP inválidos")
+		}
+
 		return nil
 	}(ctx)
 	if err != nil {
-		http.Error(w, `{"message": "erro ao consultar ViaCEP"}`, http.StatusInternalServerError)
 		return
 	}
 
