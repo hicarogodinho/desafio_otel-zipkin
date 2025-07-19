@@ -110,4 +110,11 @@ func initTracer() {
 	)
 
 	otel.SetTracerProvider(tp)
+
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	go func() {
+		<-ctx.Done()
+		_ = tp.Shutdown(context.Background())
+	}()
 }

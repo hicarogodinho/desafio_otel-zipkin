@@ -6,6 +6,13 @@ receivers:
       grpc:
         endpoint: "0.0.0.0:4317"
 
+processors:
+  batch: {}  # processa lotes de spans
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 400
+    spike_limit_mib: 100
+
 exporters:
   zipkin:
     endpoint: "http://zipkin:9411/api/v2/spans"
@@ -14,4 +21,5 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
+      processors: [memory_limiter,batch]
       exporters: [zipkin]

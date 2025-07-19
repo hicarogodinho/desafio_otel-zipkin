@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
@@ -48,7 +49,13 @@ func main() {
 	initTracer()
 
 	mux := http.NewServeMux()
-	mux.Handle("/clima", otelhttp.NewHandler(http.HandlerFunc(climaHandler), "climaHandler"))
+	mux.Handle("/clima", otelhttp.NewHandler(
+		http.HandlerFunc(climaHandler),
+		"climaHandler",
+		otelhttp.WithTracerProvider(otel.GetTracerProvider()),
+		otelhttp.WithPropagators(otel.GetTextMapPropagator()),
+	))
+	// mux.Handle("/clima", otelhttp.NewHandler(http.HandlerFunc(climaHandler), "climaHandler"))
 	// http.HandleFunc("/clima", climaHandler)
 	// fmt.Println("Servidor rodando na porta 8080...")
 	port := os.Getenv("PORT")
@@ -66,7 +73,8 @@ var (
 )
 
 func climaHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	// ctx := r.Context()
+	ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
 	tr := otel.Tracer("servico_b")
 
 	cep := r.URL.Query().Get("cep")
@@ -181,4 +189,11 @@ func initTracer() {
 	)
 
 	otel.SetTracerProvider(tp)
+
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	go func() {
+		<-ctx.Done()
+		_ = tp.Shutdown(context.Background())
+	}()
 }
