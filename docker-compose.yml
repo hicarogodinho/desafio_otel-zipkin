@@ -6,6 +6,8 @@ services:
     container_name: servico_b
     ports:
       - "8081:8080"  # Porta externa 8081 → interna 8080
+    depends_on:
+      - otel-collector
     networks:
       - rede_interna
 
@@ -17,20 +19,26 @@ services:
     ports:
       - "8080:8081"  # Porta externa 8080 → interna 8080
     depends_on:
+      - otel-collector
       - servico_b
     networks:
       - rede_interna
 
   zipkin:
-    image: openzipkin/zipkin
+    image: openzipkin/zipkin:latest
     container_name: zipkin
     ports:
       - "9411:9411"
     networks:
       - rede_interna
+    healthcheck: # Garante que o Zipkin esteja pronto
+      test: ["CMD", "curl", "-f", "http://localhost:9411/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   otel-collector:
-    image: otel/opentelemetry-collector:latest
+    image: otel/opentelemetry-collector-contrib:latest
     container_name: otel-collector
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
@@ -43,6 +51,6 @@ services:
     networks:
       - rede_interna
 
-
 networks:
   rede_interna:
+    driver: bridge

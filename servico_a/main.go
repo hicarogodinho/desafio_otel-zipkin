@@ -64,13 +64,20 @@ func cepHandler(w http.ResponseWriter, r *http.Request) {
 	client := http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
 	resp, err := client.Do(reqB)
 	if err != nil {
+		log.Printf("Erro ao chamar serviço B: %v", err)
 		http.Error(w, `{"message": "erro ao consultar o serviço B"}`, http.StatusInternalServerError)
 		return
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
-	w.Header().Set("Content-Type", "application/json")
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("Erro ao ler resposta do serviço B: %v", err)
+		http.Error(w, `{"message": "erro ao processar resposta do serviço B"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
 	w.WriteHeader(resp.StatusCode)
 	w.Write(body)
 }
